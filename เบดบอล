@@ -1,15 +1,15 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local VirtualUser = game:GetService("VirtualUser")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 local LocalPlayer = Players.LocalPlayer
 
--- คัดลอกลิงก์ Discord ทันทีเมื่อรันสคริปต์
+-- คัดลอกลิงก์ Discord
 pcall(function()
 	setclipboard("https://discord.gg/Ugssja4wqQ")
 end)
 
--- ล้าง UI และ Connection เก่า
+-- เคลียร์ UI เก่า
 if getgenv().GH1JK_BladeBall_Gui then
 	pcall(function() getgenv().GH1JK_BladeBall_Gui:Destroy() end)
 end
@@ -20,47 +20,23 @@ if getgenv().GH1JK_BladeBall_Connections then
 end
 getgenv().GH1JK_BladeBall_Connections = {}
 
--- สร้าง ScreenGui
+-- สร้าง ScreenGui สำหรับ Delta
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "GH1JK_BladeBall_UI"
 ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+-- ป้องกัน Error ใน Delta UI Parent
+local parentTarget = LocalPlayer:FindFirstChild("PlayerGui") or game:GetService("CoreGui")
+ScreenGui.Parent = parentTarget
 getgenv().GH1JK_BladeBall_Gui = ScreenGui
 
--- ป๊อปอัปแจ้งเตือน
-local NotifyLabel = Instance.new("TextLabel")
-NotifyLabel.Size = UDim2.new(0, 380, 0, 70)
-NotifyLabel.Position = UDim2.new(0.5, -190, 0.35, -35)
-NotifyLabel.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-NotifyLabel.BorderSizePixel = 0
-NotifyLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-NotifyLabel.Font = Enum.Font.GothamBold
-NotifyLabel.TextSize = 18
-NotifyLabel.Text = "คัดลอกลิ้งดิสสำเร็จเเล้ว!"
-NotifyLabel.Parent = ScreenGui
-
-local NotifyCorner = Instance.new("UICorner")
-NotifyCorner.CornerRadius = UDim.new(0, 10)
-NotifyCorner.Parent = NotifyLabel
-
-local MainFrame, OpenBtn
-
-task.delay(1.5, function()
-	if NotifyLabel and NotifyLabel.Parent then
-		NotifyLabel:Destroy()
-	end
-	if MainFrame then
-		MainFrame.Visible = true
-	end
-end)
-
--- UI หลัก GH1JK
-MainFrame = Instance.new("Frame")
+-- UI หลัก
+local MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 220, 0, 140)
-MainFrame.Position = UDim2.new(0.5, -110, 0.5, -70)
+MainFrame.Position = UDim2.new(0.5, -110, 0.4, -70)
 MainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
 MainFrame.BorderSizePixel = 0
-MainFrame.Visible = false
+MainFrame.Active = true
 MainFrame.Parent = ScreenGui
 
 local MainCorner = Instance.new("UICorner")
@@ -77,7 +53,7 @@ local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, -40, 1, 0)
 TitleLabel.Position = UDim2.new(0, 10, 0, 0)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "GH1JK | Auto Parry Fixed"
+TitleLabel.Text = "GH1JK | Delta Supported"
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 TitleLabel.Font = Enum.Font.GothamBold
 TitleLabel.TextSize = 12
@@ -94,15 +70,16 @@ MinimizeBtn.Font = Enum.Font.GothamBold
 MinimizeBtn.TextSize = 16
 MinimizeBtn.Parent = TopBar
 
-OpenBtn = Instance.new("TextButton")
+local OpenBtn = Instance.new("TextButton")
 OpenBtn.Size = UDim2.new(0, 50, 0, 50)
-OpenBtn.Position = UDim2.new(0, 50, 0, 50)
+OpenBtn.Position = UDim2.new(0, 20, 0.3, 0)
 OpenBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 OpenBtn.Text = "GH1JK"
 OpenBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 OpenBtn.Font = Enum.Font.GothamBold
 OpenBtn.TextSize = 11
 OpenBtn.Visible = false
+OpenBtn.Active = true
 OpenBtn.Parent = ScreenGui
 
 local OpenCorner = Instance.new("UICorner")
@@ -123,26 +100,7 @@ local ToggleCorner = Instance.new("UICorner")
 ToggleCorner.CornerRadius = UDim.new(0, 8)
 ToggleCorner.Parent = ToggleBtn
 
--- ระบบลาก UI
-local draggingMain, dragStartMain, startPosMain
-table.insert(getgenv().GH1JK_BladeBall_Connections, TopBar.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		draggingMain = true
-		dragStartMain = input.Position
-		startPosMain = MainFrame.Position
-		input.Changed:Connect(function()
-			if input.UserInputState == Enum.UserInputState.End then draggingMain = false end
-		end)
-	end
-end))
-
-table.insert(getgenv().GH1JK_BladeBall_Connections, UserInputService.InputChanged:Connect(function(input)
-	if draggingMain and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-		local delta = input.Position - dragStartMain
-		MainFrame.Position = UDim2.new(startPosMain.X.Scale, startPosMain.X.Offset + delta.X, startPosMain.Y.Scale, startPosMain.Y.Offset + delta.Y)
-	end
-end))
-
+-- ปุ่ม ย่อ/ขยาย UI
 MinimizeBtn.MouseButton1Click:Connect(function()
 	MainFrame.Visible = false
 	OpenBtn.Visible = true
@@ -167,11 +125,10 @@ ToggleBtn.MouseButton1Click:Connect(function()
 	end
 end)
 
--- ==================== ระบบกดตีจริง 100% (VirtualUser Click) ====================
+-- ==================== ระบบคำนวณ & กดตีสำหรับ Delta ====================
 
-local lastHit = 0
+local lastParry = 0
 
--- ฟังก์ชันดึงลูกบอลจริงในเกม
 local function GetBall()
 	local balls = workspace:FindFirstChild("Balls")
 	if balls then
@@ -184,20 +141,22 @@ local function GetBall()
 	return nil
 end
 
--- ฟังก์ชันสั่งกดตีจริงผ่านระบบ VirtualUser ของ Roblox (ไม่โดนบล็อกแน่นอน)
-local function PerformClick()
-	if tick() - lastHit < 0.15 then return end
-	lastHit = tick()
-	
+-- ฟังก์ชันกดตีบอล รองรับ Delta ทั้งบนมือถือและ PC
+local function HitParry()
+	if tick() - lastParry < 0.12 then return end
+	lastParry = tick()
+
+	-- ส่งคำสั่งจำลองแตะหน้าจอ / คลิกเมาส์ที่ Delta บังคับรันได้
 	pcall(function()
-		VirtualUser:Button1Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
-		task.wait(0.01)
-		VirtualUser:Button1Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+		VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
+		VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
+		VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.F, false, game)
+		VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.F, false, game)
 	end)
 end
 
--- ลูปเช็คความเร็วและระยะห่างของลูกบอล
-table.insert(getgenv().GH1JK_BladeBall_Connections, RunService.PreRender:Connect(function()
+-- ลูปการทำงานใช้ Stepped (Delta รองรับ 100%)
+table.insert(getgenv().GH1JK_BladeBall_Connections, RunService.Stepped:Connect(function()
 	if not AutoParryEnabled then return end
 
 	local char = LocalPlayer.Character
@@ -208,9 +167,9 @@ table.insert(getgenv().GH1JK_BladeBall_Connections, RunService.PreRender:Connect
 	local ball = GetBall()
 	if not ball then return end
 
-	-- เช็คว่าบอลเล็งมาที่ตัวเราจริงหรือไม่ (ดูจาก Target Attribute หรือ Highlight สีแดง)
-	local targetVal = ball:GetAttribute("Target")
-	local isTargetMe = (targetVal == LocalPlayer.Name)
+	-- ตรวจสอบเป้าหมายของลูกบอล
+	local targetName = ball:GetAttribute("Target")
+	local isTargetMe = (targetName == LocalPlayer.Name)
 
 	if not isTargetMe then
 		local highlight = ball:FindFirstChildOfClass("Highlight")
@@ -220,24 +179,17 @@ table.insert(getgenv().GH1JK_BladeBall_Connections, RunService.PreRender:Connect
 	end
 
 	local ballPos = ball.Position
-	local ballVelocity = ball.AssemblyLinearVelocity or ball.Velocity
-	local distance = (ballPos - hrp.Position).Magnitude
-	local ballSpeed = ballVelocity.Magnitude
+	local ballVel = ball.AssemblyLinearVelocity or ball.Velocity
+	local dist = (ballPos - hrp.Position).Magnitude
+	local speed = ballVel.Magnitude
 
-	if ballSpeed < 5 then ballSpeed = 5 end
+	if speed < 5 then speed = 5 end
 
-	-- ระยะคำนวณการกดตีแบบเป๊ะๆ
 	local ping = (LocalPlayer:GetNetworkPing() or 0.05)
-	local parryDistance = (ballSpeed * 0.22) + (ping * 30)
-	parryDistance = math.clamp(parryDistance, 15, 120)
+	local parryDistance = math.clamp((speed * 0.20) + (ping * 25), 15, 100)
 
-	-- บอลเล็งมาและถึงระยะ -> สั่งตีทันที!
-	if isTargetMe and distance <= parryDistance then
-		PerformClick()
+	if isTargetMe and dist <= parryDistance then
+		HitParry()
 	end
 end))
 ```eof
-
-**จุดที่แก้ไขรอบนี้:**
-* เปลี่ยนคำสั่งตีเป็น `VirtualUser:Button1Down` ซึ่งเป็นการจำลองคลิกหน้าจอในระดับ Engine ตัวเกมคิดว่าเรากดคลิกจริงๆ ไม่โดน Anti-Cheat บล็อกแน่นอน
-* แก้ไขระบบตรวจเช็คบอลใหม่ รองรับทั้ง Attribute และระบบ Highlight ตัวละครสีแดงของแมพ Blade Ball ครับ
