@@ -1,9 +1,8 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
-local Camera = workspace.CurrentCamera
 
 -- คัดลอกลิงก์ Discord ทันทีเมื่อรันสคริปต์
 pcall(function()
@@ -156,7 +155,7 @@ local StatusLabel = Instance.new("TextLabel")
 StatusLabel.Size = UDim2.new(1, -20, 0, 25)
 StatusLabel.Position = UDim2.new(0, 10, 0, 100)
 StatusLabel.BackgroundTransparency = 1
-StatusLabel.Text = "ค่าย GH1JK - พร้อมทำงาน"
+StatusLabel.Text = "ค่าย GH1JK - โหมดหลบ Anti-Cheat"
 StatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 StatusLabel.Font = Enum.Font.GothamBold
 StatusLabel.TextSize = 10
@@ -231,20 +230,32 @@ ToggleBtn.MouseButton1Click:Connect(function()
 	end
 end)
 
--- ==================== ระบบคำนวณและตีบอล Blade Ball ====================
+-- ==================== ระบบคำนวณและตีบอลที่ปลอดภัย (Anti-Kick) ====================
 
--- ฟังก์ชันดึงวัตถุลูกบอลหลักจาก Workspace
+local lastParryTime = 0
+local parryCooldown = 0.25 -- ป้องกันการส่งคำสั่งถี่เกินไปที่จะทำให้โดนเตะ
+
+-- ค้นหา Remote ของ Blade Ball
+local function GetParryRemote()
+	local remotes = ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage
+	for _, v in pairs(remotes:GetDescendants()) do
+		if v:IsA("RemoteEvent") and (v.Name == "ParryButtonPress" or v.Name == "Parry" or v.Name == "ParryAttempt" or string.find(string.lower(v.Name), "parry")) then
+			return v
+		end
+	end
+	return nil
+end
+
+-- ฟังก์ชันค้นหาลูกบอล
 local function GetBall()
 	local ballsFolder = workspace:FindFirstChild("Balls")
 	if ballsFolder then
 		for _, child in pairs(ballsFolder:GetChildren()) do
-			if child:IsA("BasePart") or child:FindFirstChildOfClass("Part") or child.Name == "Ball" then
+			if child:IsA("BasePart") or child.Name == "Ball" then
 				return child
 			end
 		end
 	end
-	
-	-- กรณีที่เกมซ่อนลูกบอลไว้ในโฟลเดอร์อื่น
 	for _, obj in pairs(workspace:GetChildren()) do
 		if (obj.Name == "Ball" or string.find(string.lower(obj.Name), "ball")) and obj:IsA("BasePart") then
 			return obj
@@ -253,18 +264,30 @@ local function GetBall()
 	return nil
 end
 
--- ฟังก์ชันส่งคำสั่งกดตีบอล (Block / Parry)
-local function ParryBall()
-	-- ส่งคำสั่งคลิกเมาส์ซ้าย หรือกดปุ่ม F/F1 สำหรับระบบต่าง ๆ ของแมพ
-	VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-	VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-	
-	VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.F, false, game)
-	VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.F, false, game)
+-- ฟังก์ชันตีบอลอย่างปลอดภัย (Safe Parry)
+local function SafeParry()
+	local currentTime = tick()
+	if currentTime - lastParryTime < parryCooldown then return end
+	lastParryTime = currentTime
+
+	-- วิธีที่ 1: ยิงผ่าน RemoteEvent ของเกมโดยตรง (เนียนที่สุด ปลอดภัยจากการโดนเตะ)
+	local parryRemote = GetParryRemote()
+	if parryRemote then
+		pcall(function()
+			parryRemote:FireServer(0.5, CFrame.new(), {}, {0, 0})
+		end)
+	else
+		-- วิธีที่ 2: ใช้ KeyPress Event แบบปลอดภัยกรณีหา Remote ไม่เจอ
+		pcall(function()
+			keypress(0x46) -- กดปุ่ม F
+			task.wait(0.02)
+			keyrelease(0x46)
+		end)
+	end
 end
 
--- ลูปคำนวณระยะห่างและความเร็วของลูกบอล (RenderStepped)
-table.insert(getgenv().GH1JK_BladeBall_Connections, RunService.PreRender:Connect(function()
+-- ลูปการทำงาน
+table.insert(getgenv().GH1JK_BladeBall_Connections, RunService.Heartbeat:Connect(function()
 	if not AutoParryEnabled then return end
 	
 	local myChar = LocalPlayer.Character
@@ -276,24 +299,24 @@ table.insert(getgenv().GH1JK_BladeBall_Connections, RunService.PreRender:Connect
 	local ball = GetBall()
 	if not ball then return end
 
-	-- ตรวจสอบว่าลูกบอลเล็งเป้าหมายมาที่ตัวเราหรือไม่
+	-- ตรวจสอบว่าเป้าหมายลูกบอลคือตัวเราหรือไม่
 	local targetPlayerName = ball:GetAttribute("Target") or (ball:FindFirstChild("Target") and ball.Target.Value)
-	local isTargetingMe = (targetPlayerName == LocalPlayer.Name) or (ball:FindFirstChild("Dot") and ball.Dot.Color == Color3.fromRGB(255, 0, 0))
+	local isTargetingMe = (targetPlayerName == LocalPlayer.Name)
 
 	local ballPos = ball.Position
 	local ballVelocity = ball.AssemblyLinearVelocity or ball.Velocity
 	local distance = (ballPos - hrp.Position).Magnitude
 	local ballSpeed = ballVelocity.Magnitude
 
-	-- คำนวณเวลาที่ลูกบอลจะมาถึงตัวเรา (Time to Reach)
-	local timeToReach = distance / (ballSpeed > 0 and ballSpeed or 1)
+	if ballSpeed < 1 then ballSpeed = 1 end
 
-	-- คำนวณระยะพะวงในการกดตีบอล (Ping & Velocity Offset)
-	local ping = LocalPlayer:GetNetworkPing() or 0.05
-	local hitThreshold = math.clamp(ballSpeed * 0.05 + (ping * 1.5), 10, 65)
+	local timeToReach = distance / ballSpeed
+	local ping = (LocalPlayer:GetNetworkPing() or 0.05)
 
-	-- หากลูกบอลพุ่งมาหาเราและอยู่ในระยะปลอดภัย ให้กดตีบอลทันที
-	if (isTargetingMe or distance <= hitThreshold) and timeToReach <= (0.35 + ping) then
-		ParryBall()
+	-- ระยะคำนวณที่ปลอดภัยจากการตรวจจับ
+	local safeDistanceThreshold = math.clamp(ballSpeed * 0.1 + (ping * 10), 12, 50)
+
+	if isTargetingMe and (distance <= safeDistanceThreshold or timeToReach <= (0.28 + ping)) then
+		SafeParry()
 	end
 end))
