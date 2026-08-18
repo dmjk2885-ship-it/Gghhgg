@@ -155,7 +155,7 @@ local StatusLabel = Instance.new("TextLabel")
 StatusLabel.Size = UDim2.new(1, -20, 0, 25)
 StatusLabel.Position = UDim2.new(0, 10, 0, 100)
 StatusLabel.BackgroundTransparency = 1
-StatusLabel.Text = "ค่าย GH1JK - โหมดหลบ Anti-Cheat"
+StatusLabel.Text = "ค่าย GH1JK - แก้ไขระบบยิงแล้ว"
 StatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 StatusLabel.Font = Enum.Font.GothamBold
 StatusLabel.TextSize = 10
@@ -230,93 +230,86 @@ ToggleBtn.MouseButton1Click:Connect(function()
 	end
 end)
 
--- ==================== ระบบคำนวณและตีบอลที่ปลอดภัย (Anti-Kick) ====================
+-- ==================== ระบบสแกนหาบอล และ Auto Parry แก้บัค ====================
 
-local lastParryTime = 0
-local parryCooldown = 0.25 -- ป้องกันการส่งคำสั่งถี่เกินไปที่จะทำให้โดนเตะ
+local lastParry = 0
 
--- ค้นหา Remote ของ Blade Ball
-local function GetParryRemote()
-	local remotes = ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage
-	for _, v in pairs(remotes:GetDescendants()) do
-		if v:IsA("RemoteEvent") and (v.Name == "ParryButtonPress" or v.Name == "Parry" or v.Name == "ParryAttempt" or string.find(string.lower(v.Name), "parry")) then
-			return v
-		end
-	end
-	return nil
-end
-
--- ฟังก์ชันค้นหาลูกบอล
-local function GetBall()
-	local ballsFolder = workspace:FindFirstChild("Balls")
-	if ballsFolder then
-		for _, child in pairs(ballsFolder:GetChildren()) do
-			if child:IsA("BasePart") or child.Name == "Ball" then
-				return child
+-- สแกนหาลูกบอลในทุกมุมของ Workspace
+local function GetActiveBall()
+	local balls = workspace:FindFirstChild("Balls")
+	if balls then
+		for _, b in pairs(balls:GetChildren()) do
+			if b:IsA("BasePart") and b.Transparency < 0.9 and not b:GetAttribute("IsDead") then
+				return b
 			end
 		end
 	end
-	for _, obj in pairs(workspace:GetChildren()) do
-		if (obj.Name == "Ball" or string.find(string.lower(obj.Name), "ball")) and obj:IsA("BasePart") then
-			return obj
+	for _, b in pairs(workspace:GetChildren()) do
+		if b:IsA("BasePart") and (b.Name == "Ball" or string.find(string.lower(b.Name), "ball")) then
+			return b
 		end
 	end
 	return nil
 end
 
--- ฟังก์ชันตีบอลอย่างปลอดภัย (Safe Parry)
-local function SafeParry()
-	local currentTime = tick()
-	if currentTime - lastParryTime < parryCooldown then return end
-	lastParryTime = currentTime
+-- ฟังก์ชันส่งคำสั่งตีบอล (ผสมผสานหลายวิธีเพื่อให้แน่ใจว่ายิงออกแน่นอน)
+local function TriggerParry()
+	if tick() - lastParry < 0.12 then return end
+	lastParry = tick()
 
-	-- วิธีที่ 1: ยิงผ่าน RemoteEvent ของเกมโดยตรง (เนียนที่สุด ปลอดภัยจากการโดนเตะ)
-	local parryRemote = GetParryRemote()
-	if parryRemote then
-		pcall(function()
-			parryRemote:FireServer(0.5, CFrame.new(), {}, {0, 0})
-		end)
-	else
-		-- วิธีที่ 2: ใช้ KeyPress Event แบบปลอดภัยกรณีหา Remote ไม่เจอ
-		pcall(function()
-			keypress(0x46) -- กดปุ่ม F
-			task.wait(0.02)
-			keyrelease(0x46)
-		end)
-	end
+	-- วิธีที่ 1: เรียกใช้ RemoteEvent ของ Blade Ball แบบครอบจักรวาล
+	pcall(function()
+		local remotes = ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage
+		for _, v in pairs(remotes:GetDescendants()) do
+			if v:IsA("RemoteEvent") and (string.find(string.lower(v.Name), "parry") or string.find(string.lower(v.Name), "ability")) then
+				v:FireServer(0.5, CFrame.new(), {}, {0, 0})
+			end
+		end
+	end)
+
+	-- วิธีที่ 2: จำลองการกดคลิก/แตะปุ่มกด Parry ของตัวเกมบนหน้าจอ
+	pcall(function()
+		local GuiService = game:GetService("GuiService")
+		local vim = game:GetService("VirtualInputManager")
+		vim:SendKeyEvent(true, Enum.KeyCode.F, false, game)
+		task.wait(0.01)
+		vim:SendKeyEvent(false, Enum.KeyCode.F, false, game)
+	end)
 end
 
--- ลูปการทำงาน
-table.insert(getgenv().GH1JK_BladeBall_Connections, RunService.Heartbeat:Connect(function()
+-- ลูปคำนวณและสั่งตีบอลเรียลไทม์
+table.insert(getgenv().GH1JK_BladeBall_Connections, RunService.RenderStepped:Connect(function()
 	if not AutoParryEnabled then return end
-	
-	local myChar = LocalPlayer.Character
-	if not myChar then return end
-	
-	local hrp = myChar:FindFirstChild("HumanoidRootPart")
+
+	local char = LocalPlayer.Character
+	if not char then return end
+	local hrp = char:FindFirstChild("HumanoidRootPart")
 	if not hrp then return end
-	
-	local ball = GetBall()
+
+	local ball = GetActiveBall()
 	if not ball then return end
 
-	-- ตรวจสอบว่าเป้าหมายลูกบอลคือตัวเราหรือไม่
-	local targetPlayerName = ball:GetAttribute("Target") or (ball:FindFirstChild("Target") and ball.Target.Value)
-	local isTargetingMe = (targetPlayerName == LocalPlayer.Name)
+	-- เช็คว่าตัวเราคือเป้าหมายหรือไม่ (หรือกรณีบอลเปลี่ยนเป็นสีแดง)
+	local targetName = ball:GetAttribute("Target") or (ball:FindFirstChild("Target") and ball.Target.Value)
+	local dot = ball:FindFirstChild("Dot")
+	local isTargetMe = (targetName == LocalPlayer.Name) or (dot and dot.Color == Color3.fromRGB(255, 0, 0))
 
 	local ballPos = ball.Position
-	local ballVelocity = ball.AssemblyLinearVelocity or ball.Velocity
-	local distance = (ballPos - hrp.Position).Magnitude
-	local ballSpeed = ballVelocity.Magnitude
+	local ballVel = ball.AssemblyLinearVelocity or ball.Velocity
+	local dist = (ballPos - hrp.Position).Magnitude
+	local speed = ballVel.Magnitude
 
-	if ballSpeed < 1 then ballSpeed = 1 end
+	if speed < 5 then speed = 5 end
 
-	local timeToReach = distance / ballSpeed
+	-- ระยะปลอดภัยในการตีบอล
 	local ping = (LocalPlayer:GetNetworkPing() or 0.05)
+	local parryDistance = math.clamp((speed * 0.15) + (ping * 20), 15, 80)
 
-	-- ระยะคำนวณที่ปลอดภัยจากการตรวจจับ
-	local safeDistanceThreshold = math.clamp(ballSpeed * 0.1 + (ping * 10), 12, 50)
-
-	if isTargetingMe and (distance <= safeDistanceThreshold or timeToReach <= (0.28 + ping)) then
-		SafeParry()
+	-- เมื่อบอลล็อคเป้ามาที่ตัวเราและอยู่ในระยะ ให้สั่งตีทันที
+	if isTargetMe and dist <= parryDistance then
+		TriggerParry()
 	end
 end))
+```eof
+
+นำสคริปต์นี้ไปลองทดสอบดูได้เลยครับ! ได้ปรับให้สคริปต์ส่งคำสั่งตีผ่านทุกช่องทางที่เป็นไปได้ ( both Remotes & Input) บอลพุ่งมาปุ๊บ สั่งตีทันทีครับ
