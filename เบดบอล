@@ -4,12 +4,10 @@ local UserInputService = game:GetService("UserInputService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local LocalPlayer = Players.LocalPlayer
 
--- คัดลอกลิงก์ Discord
 pcall(function()
-	setclipboard("https://discord.gg/Ugssja4wqQ")
+	setclipboard("[https://discord.gg/Ugssja4wqQ](https://discord.gg/Ugssja4wqQ)")
 end)
 
--- เคลียร์ UI เก่า
 if getgenv().GH1JK_BladeBall_Gui then
 	pcall(function() getgenv().GH1JK_BladeBall_Gui:Destroy() end)
 end
@@ -20,17 +18,14 @@ if getgenv().GH1JK_BladeBall_Connections then
 end
 getgenv().GH1JK_BladeBall_Connections = {}
 
--- สร้าง ScreenGui สำหรับ Delta
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "GH1JK_BladeBall_UI"
 ScreenGui.ResetOnSpawn = false
 
--- ป้องกัน Error ใน Delta UI Parent
 local parentTarget = LocalPlayer:FindFirstChild("PlayerGui") or game:GetService("CoreGui")
 ScreenGui.Parent = parentTarget
 getgenv().GH1JK_BladeBall_Gui = ScreenGui
 
--- UI หลัก
 local MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 220, 0, 140)
 MainFrame.Position = UDim2.new(0.5, -110, 0.4, -70)
@@ -100,7 +95,6 @@ local ToggleCorner = Instance.new("UICorner")
 ToggleCorner.CornerRadius = UDim.new(0, 8)
 ToggleCorner.Parent = ToggleBtn
 
--- ปุ่ม ย่อ/ขยาย UI
 MinimizeBtn.MouseButton1Click:Connect(function()
 	MainFrame.Visible = false
 	OpenBtn.Visible = true
@@ -125,8 +119,6 @@ ToggleBtn.MouseButton1Click:Connect(function()
 	end
 end)
 
--- ==================== ระบบคำนวณ & กดตีสำหรับ Delta ====================
-
 local lastParry = 0
 
 local function GetBall()
@@ -141,12 +133,10 @@ local function GetBall()
 	return nil
 end
 
--- ฟังก์ชันกดตีบอล รองรับ Delta ทั้งบนมือถือและ PC
 local function HitParry()
 	if tick() - lastParry < 0.12 then return end
 	lastParry = tick()
 
-	-- ส่งคำสั่งจำลองแตะหน้าจอ / คลิกเมาส์ที่ Delta บังคับรันได้
 	pcall(function()
 		VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
 		VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
@@ -155,7 +145,6 @@ local function HitParry()
 	end)
 end
 
--- ลูปการทำงานใช้ Stepped (Delta รองรับ 100%)
 table.insert(getgenv().GH1JK_BladeBall_Connections, RunService.Stepped:Connect(function()
 	if not AutoParryEnabled then return end
 
@@ -167,7 +156,6 @@ table.insert(getgenv().GH1JK_BladeBall_Connections, RunService.Stepped:Connect(f
 	local ball = GetBall()
 	if not ball then return end
 
-	-- ตรวจสอบเป้าหมายของลูกบอล
 	local targetName = ball:GetAttribute("Target")
 	local isTargetMe = (targetName == LocalPlayer.Name)
 
