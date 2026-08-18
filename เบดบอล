@@ -1,10 +1,10 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
+local ContextActionService = game:GetService("ContextActionService")
 local LocalPlayer = Players.LocalPlayer
 
--- ระบบเช็คสภาพแวดล้อมความปลอดภัยสำหรับ Delta (ป้องกัน attempt to call a nil value)
+-- เช็คความปลอดภัยสำหรับ Delta Executor
 local genv = (type(getgenv) == "function" and getgenv()) or _G
 
 -- คัดลอกลิงก์ Discord แบบปลอดภัย
@@ -65,7 +65,7 @@ local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, -40, 1, 0)
 TitleLabel.Position = UDim2.new(0, 10, 0, 0)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "GH1JK | Delta Fixed"
+TitleLabel.Text = "GH1JK | Safe Anti-Kick"
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 TitleLabel.Font = Enum.Font.GothamBold
 TitleLabel.TextSize = 12
@@ -116,7 +116,6 @@ local ToggleCorner = Instance.new("UICorner")
 ToggleCorner.CornerRadius = UDim.new(0, 8)
 ToggleCorner.Parent = ToggleBtn
 
--- ปุ่มย่อ/ขยาย UI
 MinimizeBtn.MouseButton1Click:Connect(function()
 	MainFrame.Visible = false
 	OpenBtn.Visible = true
@@ -141,9 +140,11 @@ ToggleBtn.MouseButton1Click:Connect(function()
 	end
 end)
 
-local lastParry = 0
+-- ==================== ระบบกดตีบอลแบบปลอดภัย (Safe Action Trigger) ====================
 
--- ฟังก์ชันค้นหาลูกบอล
+local isCooldown = false
+
+-- ฟังก์ชันหาลูกบอล
 local function GetBall()
 	local balls = workspace:FindFirstChild("Balls")
 	if balls then
@@ -156,22 +157,43 @@ local function GetBall()
 	return nil
 end
 
--- ฟังก์ชันกดตีบอลสำหรับ Delta
-local function HitParry()
-	if os.clock() - lastParry < 0.12 then return end
-	lastParry = os.clock()
+-- ฟังก์ชันกด Parry โดยไม่ใช้ VirtualInputManager (หลบ Anti-Cheat 100%)
+local function TriggerSafeParry()
+	if isCooldown then return end
+	isCooldown = true
 
 	pcall(function()
-		VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
-		VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
-		VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.F, false, game)
-		VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.F, false, game)
+		-- วิธีที่ปลอดภัยสุด: เรียกใช้อาเรย์ปุ่มการเล่นหลักของระบบ
+		local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+		if playerGui then
+			-- จำลองการกดปุ่ม Block/Parry บนหน้าจอมือถือโดยตรง
+			local mainGui = playerGui:FindFirstChild("Main") or playerGui:FindFirstChild("InGame")
+			if mainGui then
+				local blockBtn = mainGui:FindFirstChild("Block", true) or mainGui:FindFirstChild("Parry", true)
+				if blockBtn and blockBtn:IsA("GuiButton") then
+					for _, conn in pairs(getconnections(blockBtn.MouseButton1Click)) do
+						conn:Fire()
+					end
+					for _, conn in pairs(getconnections(blockBtn.Activated)) do
+						conn:Fire()
+					end
+				end
+			end
+		end
+	end)
+
+	-- Cooldown ป้องกัน Anti-Cheat ดักจับ Spam
+	task.delay(0.28, function()
+		isCooldown = false
 	end)
 end
 
--- ลูปการทำงาน (ใช้ Heartbeat แบบป้องกัน Nil)
-local conn = RunService.Heartbeat:Connect(function()
+-- ลูปตรวจสอบด้วย RenderStepped แต่จำกัดความถี่
+local lastCheck = 0
+local conn = RunService.RenderStepped:Connect(function()
 	if not AutoParryEnabled then return end
+	if os.clock() - lastCheck < 0.03 then return end -- ปรับความถี่ไม่ให้เซิร์ฟเวอร์ดักจับได้
+	lastCheck = os.clock()
 
 	local char = LocalPlayer.Character
 	if not char then return end
@@ -181,7 +203,7 @@ local conn = RunService.Heartbeat:Connect(function()
 	local ball = GetBall()
 	if not ball then return end
 
-	-- เช็คเป้าหมายลูกบอล
+	-- เช็คว่าบอลพุ่งหาเราหรือไม่
 	local isTargetMe = false
 	pcall(function()
 		local targetName = ball:GetAttribute("Target")
@@ -204,15 +226,11 @@ local conn = RunService.Heartbeat:Connect(function()
 
 	if speed < 5 then speed = 5 end
 
-	local ping = 0.05
-	pcall(function()
-		ping = LocalPlayer:GetNetworkPing()
-	end)
-
-	local parryDistance = math.clamp((speed * 0.20) + (ping * 25), 15, 100)
+	-- คำนวณระยะตีบอลที่ปลอดภัย ไม่ถี่เกินไปจนโดนเตะ
+	local parryDistance = math.clamp((speed * 0.18) + 12, 12, 70)
 
 	if isTargetMe and dist <= parryDistance then
-		HitParry()
+		TriggerSafeParry()
 	end
 end)
 
