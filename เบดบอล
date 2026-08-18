@@ -4,28 +4,41 @@ local UserInputService = game:GetService("UserInputService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local LocalPlayer = Players.LocalPlayer
 
+-- ระบบเช็คสภาพแวดล้อมความปลอดภัยสำหรับ Delta (ป้องกัน attempt to call a nil value)
+local genv = (type(getgenv) == "function" and getgenv()) or _G
+
+-- คัดลอกลิงก์ Discord แบบปลอดภัย
 pcall(function()
-	setclipboard("[https://discord.gg/Ugssja4wqQ](https://discord.gg/Ugssja4wqQ)")
+	if type(setclipboard) == "function" then
+		setclipboard("https://discord.gg/Ugssja4wqQ")
+	elseif type(toclipboard) == "function" then
+		toclipboard("https://discord.gg/Ugssja4wqQ")
+	end
 end)
 
-if getgenv().GH1JK_BladeBall_Gui then
-	pcall(function() getgenv().GH1JK_BladeBall_Gui:Destroy() end)
+-- ล้าง UI และ Connection เก่า
+if genv.GH1JK_BladeBall_Gui then
+	pcall(function() genv.GH1JK_BladeBall_Gui:Destroy() end)
 end
-if getgenv().GH1JK_BladeBall_Connections then
-	for _, conn in pairs(getgenv().GH1JK_BladeBall_Connections) do
-		pcall(function() conn:Disconnect() end)
+if genv.GH1JK_BladeBall_Connections then
+	if type(genv.GH1JK_BladeBall_Connections) == "table" then
+		for _, conn in pairs(genv.GH1JK_BladeBall_Connections) do
+			pcall(function() conn:Disconnect() end)
+		end
 	end
 end
-getgenv().GH1JK_BladeBall_Connections = {}
+genv.GH1JK_BladeBall_Connections = {}
 
+-- สร้าง ScreenGui
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "GH1JK_BladeBall_UI"
 ScreenGui.ResetOnSpawn = false
 
 local parentTarget = LocalPlayer:FindFirstChild("PlayerGui") or game:GetService("CoreGui")
 ScreenGui.Parent = parentTarget
-getgenv().GH1JK_BladeBall_Gui = ScreenGui
+genv.GH1JK_BladeBall_Gui = ScreenGui
 
+-- หน้าต่างหลัก
 local MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 220, 0, 140)
 MainFrame.Position = UDim2.new(0.5, -110, 0.4, -70)
@@ -44,11 +57,15 @@ TopBar.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 TopBar.BorderSizePixel = 0
 TopBar.Parent = MainFrame
 
+local TopCorner = Instance.new("UICorner")
+TopCorner.CornerRadius = UDim.new(0, 8)
+TopCorner.Parent = TopBar
+
 local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, -40, 1, 0)
 TitleLabel.Position = UDim2.new(0, 10, 0, 0)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "GH1JK | Delta Supported"
+TitleLabel.Text = "GH1JK | Delta Fixed"
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 TitleLabel.Font = Enum.Font.GothamBold
 TitleLabel.TextSize = 12
@@ -64,6 +81,10 @@ MinimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 MinimizeBtn.Font = Enum.Font.GothamBold
 MinimizeBtn.TextSize = 16
 MinimizeBtn.Parent = TopBar
+
+local MinCorner = Instance.new("UICorner")
+MinCorner.CornerRadius = UDim.new(0, 6)
+MinCorner.Parent = MinimizeBtn
 
 local OpenBtn = Instance.new("TextButton")
 OpenBtn.Size = UDim2.new(0, 50, 0, 50)
@@ -95,6 +116,7 @@ local ToggleCorner = Instance.new("UICorner")
 ToggleCorner.CornerRadius = UDim.new(0, 8)
 ToggleCorner.Parent = ToggleBtn
 
+-- ปุ่มย่อ/ขยาย UI
 MinimizeBtn.MouseButton1Click:Connect(function()
 	MainFrame.Visible = false
 	OpenBtn.Visible = true
@@ -121,6 +143,7 @@ end)
 
 local lastParry = 0
 
+-- ฟังก์ชันค้นหาลูกบอล
 local function GetBall()
 	local balls = workspace:FindFirstChild("Balls")
 	if balls then
@@ -133,9 +156,10 @@ local function GetBall()
 	return nil
 end
 
+-- ฟังก์ชันกดตีบอลสำหรับ Delta
 local function HitParry()
-	if tick() - lastParry < 0.12 then return end
-	lastParry = tick()
+	if os.clock() - lastParry < 0.12 then return end
+	lastParry = os.clock()
 
 	pcall(function()
 		VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
@@ -145,7 +169,8 @@ local function HitParry()
 	end)
 end
 
-table.insert(getgenv().GH1JK_BladeBall_Connections, RunService.Stepped:Connect(function()
+-- ลูปการทำงาน (ใช้ Heartbeat แบบป้องกัน Nil)
+local conn = RunService.Heartbeat:Connect(function()
 	if not AutoParryEnabled then return end
 
 	local char = LocalPlayer.Character
@@ -156,8 +181,14 @@ table.insert(getgenv().GH1JK_BladeBall_Connections, RunService.Stepped:Connect(f
 	local ball = GetBall()
 	if not ball then return end
 
-	local targetName = ball:GetAttribute("Target")
-	local isTargetMe = (targetName == LocalPlayer.Name)
+	-- เช็คเป้าหมายลูกบอล
+	local isTargetMe = false
+	pcall(function()
+		local targetName = ball:GetAttribute("Target")
+		if targetName == LocalPlayer.Name then
+			isTargetMe = true
+		end
+	end)
 
 	if not isTargetMe then
 		local highlight = ball:FindFirstChildOfClass("Highlight")
@@ -167,16 +198,22 @@ table.insert(getgenv().GH1JK_BladeBall_Connections, RunService.Stepped:Connect(f
 	end
 
 	local ballPos = ball.Position
-	local ballVel = ball.AssemblyLinearVelocity or ball.Velocity
+	local ballVel = ball.AssemblyLinearVelocity or ball.Velocity or Vector3.new()
 	local dist = (ballPos - hrp.Position).Magnitude
 	local speed = ballVel.Magnitude
 
 	if speed < 5 then speed = 5 end
 
-	local ping = (LocalPlayer:GetNetworkPing() or 0.05)
+	local ping = 0.05
+	pcall(function()
+		ping = LocalPlayer:GetNetworkPing()
+	end)
+
 	local parryDistance = math.clamp((speed * 0.20) + (ping * 25), 15, 100)
 
 	if isTargetMe and dist <= parryDistance then
 		HitParry()
 	end
-end))
+end)
+
+table.insert(genv.GH1JK_BladeBall_Connections, conn)
