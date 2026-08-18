@@ -192,4 +192,3 @@ table.insert(getgenv().GH1JK_BladeBall_Connections, RunService.Stepped:Connect(f
 		HitParry()
 	end
 end))
-```eof
