@@ -1,0 +1,146 @@
+if not game:IsLoaded() then game.Loaded:Wait() end
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local LocalPlayer = Players.LocalPlayer
+local Workspace = game:GetService("Workspace")
+
+getgenv().AutoFarm = false
+
+local ScreenGui = Instance.new("ScreenGui")
+local MainFrame = Instance.new("Frame")
+local ToggleButton = Instance.new("TextButton")
+local Title = Instance.new("TextLabel")
+
+ScreenGui.Name = "MemeSeaGUI"
+ScreenGui.Parent = game.CoreGui
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+MainFrame.Name = "MainFrame"
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MainFrame.Position = UDim2.new(0.1, 0, 0.1, 0)
+MainFrame.Size = UDim2.new(0, 220, 0, 120)
+MainFrame.Active = true
+MainFrame.Draggable = true
+
+Title.Name = "Title"
+Title.Parent = MainFrame
+Title.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.Font = Enum.Font.SourceSansBold
+Title.Text = "Meme Sea Auto Farm"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 16
+
+ToggleButton.Name = "ToggleButton"
+ToggleButton.Parent = MainFrame
+ToggleButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+ToggleButton.Position = UDim2.new(0.1, 0, 0.45, 0)
+ToggleButton.Size = UDim2.new(0.8, 0, 0, 45)
+ToggleButton.Font = Enum.Font.SourceSansBold
+ToggleButton.Text = "Status: OFF"
+ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleButton.TextSize = 18
+
+local function FlyTo(targetCFrame)
+    if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then return end
+    local hrp = LocalPlayer.Character.HumanoidRootPart
+    local distance = (hrp.Position - targetCFrame.Position).Magnitude
+    local speed = 300
+    local timeTake = distance / speed
+    
+    local tweenInfo = TweenInfo.new(timeTake, Enum.EasingStyle.Linear)
+    local tween = TweenService:Create(hrp, tweenInfo, {CFrame = targetCFrame})
+    tween:Play()
+    
+    local completed = false
+    local connection
+    connection = tween.Completed:Connect(function()
+        completed = true
+        connection:Disconnect()
+    end)
+    
+    while not completed and getgenv().AutoFarm do
+        task.wait()
+    end
+    if not getgenv().AutoFarm then
+        tween:Cancel()
+    end
+end
+
+local function FindObject(parent, name)
+    if not parent then return nil end
+    for _, v in pairs(parent:GetDescendants()) do
+        if v.Name == name then
+            if v:IsA("Model") and v:FindFirstChild("HumanoidRootPart") then
+                return v.HumanoidRootPart
+            elseif v:IsA("BasePart") then
+                return v
+            end
+        end
+    end
+    return nil
+end
+
+ToggleButton.MouseButton1Click:Connect(function()
+    getgenv().AutoFarm = not getgenv().AutoFarm
+    if getgenv().AutoFarm then
+        ToggleButton.Text = "Status: ON"
+        ToggleButton.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+    else
+        ToggleButton.Text = "Status: OFF"
+        ToggleButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    end
+end)
+
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        if getgenv().AutoFarm then
+            pcall(function()
+                local playerLevel = 1
+                if LocalPlayer:FindFirstChild("Data") and LocalPlayer.Data:FindFirstChild("Level") then
+                    playerLevel = LocalPlayer.Data.Level.Value
+                end
+
+                local questName = "Floppa Quest 1"
+                local monsterName = "Floppa"
+
+                if playerLevel >= 15 and playerLevel < 30 then
+                    questName = "Floppa Quest 2"
+                    monsterName = "Floppa"
+                elseif playerLevel >= 30 then
+                    questName = "Floppa Quest 3"
+                    monsterName = "Floppa"
+                end
+
+                local char = LocalPlayer.Character
+                if not char or not char:FindFirstChild("HumanoidRootPart") or char.Humanoid.Health <= 0 then return end
+
+                local questPart = FindObject(Workspace, questName) or FindObject(Workspace, "Main Quest")
+                if questPart then
+                    FlyTo(questPart.CFrame + Vector3.new(0, 3, 0))
+                    task.wait(0.5)
+                    for _, v in pairs(Workspace:GetDescendants()) do
+                        if v:IsA("ProximityPrompt") and (v.Parent.Position - char.HumanoidRootPart.Position).Magnitude < 15 then
+                            fireproximityprompt(v)
+                        end
+                    end
+                end
+
+                local monsterPart = FindObject(Workspace, monsterName)
+                if monsterPart then
+                    local behindMonsterCFrame = monsterPart.CFrame * CFrame.new(0, 3, 4)
+                    FlyTo(behindMonsterCFrame)
+
+                    while getgenv().AutoFarm and monsterPart and monsterPart.Parent and monsterPart.Parent:FindFirstChild("Humanoid") and monsterPart.Parent.Humanoid.Health > 0 do
+                        char.HumanoidRootPart.CFrame = monsterPart.CFrame * CFrame.new(0, 3, 4)
+                        game:GetService("VirtualUser"):Button1Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+                        task.wait(0.2)
+                    end
+                end
+            end)
+        end
+    end
+end)
