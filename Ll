@@ -1,0 +1,154 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+local Settings = {
+    FastAttack = false,
+    Reach = false,
+    ReachDistance = 25,
+    AttackCooldown = 0.05
+}
+
+local lastAttackTime = 0
+
+local function AttackTarget(targetMonster)
+    if not targetMonster or not targetMonster:IsA("Model") then
+        warn("[Script Warning] กรุณาใส่ Parameter 'targetMonster' (Model ของมอนสเตอร์) ด้วย!")
+        return
+    end
+
+    local humanoid = targetMonster:FindFirstChildOfClass("Humanoid")
+    local hrp = targetMonster:FindFirstChild("HumanoidRootPart")
+
+    if not humanoid or not hrp or humanoid.Health <= 0 then
+        return
+    end
+
+    local character = LocalPlayer.Character
+    if not character or not character:FindFirstChildOfClass("Humanoid") then return end
+    
+    local myHrp = character:FindFirstChild("HumanoidRootPart")
+    if not myHrp then return end
+
+    local distance = (myHrp.Position - hrp.Position).Magnitude
+
+    local canHit = false
+    if Settings.Reach then
+        if distance <= Settings.ReachDistance then
+            canHit = true
+        end
+    else
+        if distance <= 8 then
+            canHit = true
+        end
+    end
+
+    if canHit then
+        local currentTime = tick()
+        local cooldown = Settings.FastAttack and Settings.AttackCooldown or 0.35
+
+        if currentTime - lastAttackTime >= cooldown then
+            lastAttackTime = currentTime
+
+            pcall(function()
+                local net = game:GetService("ReplicatedStorage"):WaitForChild("Modules"):WaitForChild("Net")
+                net:WaitForChild("RE/RegisterAttack"):FireServer(Settings.ReachDistance)
+                net:WaitForChild("RE/RegisterHit"):FireServer(hrp, {targetMonster})
+            end)
+        end
+    end
+end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "GK_BloxMenu"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 200, 0, 160)
+MainFrame.Position = UDim2.new(0.05, 0, 0.4, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 30)
+Title.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+Title.Text = "GK Attack Mod"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 14
+Title.Font = Enum.Font.SourceSansBold
+Title.Parent = MainFrame
+
+local FastBtn = Instance.new("TextButton")
+FastBtn.Size = UDim2.new(0.9, 0, 0, 35)
+FastBtn.Position = UDim2.new(0.05, 0, 0.28, 0)
+FastBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+FastBtn.Text = "Fast Attack: OFF"
+FastBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+FastBtn.Font = Enum.Font.SourceSans
+FastBtn.TextSize = 14
+FastBtn.Parent = MainFrame
+
+FastBtn.MouseButton1Click:Connect(function()
+    Settings.FastAttack = not Settings.FastAttack
+    if Settings.FastAttack then
+        FastBtn.Text = "Fast Attack: ON"
+        FastBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 50)
+    else
+        FastBtn.Text = "Fast Attack: OFF"
+        FastBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+    end
+end)
+
+local ReachBtn = Instance.new("TextButton")
+ReachBtn.Size = UDim2.new(0.9, 0, 0, 35)
+ReachBtn.Position = UDim2.new(0.05, 0, 0.58, 0)
+ReachBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+ReachBtn.Text = "Reach: OFF"
+ReachBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ReachBtn.Font = Enum.Font.SourceSans
+ReachBtn.TextSize = 14
+ReachBtn.Parent = MainFrame
+
+ReachBtn.MouseButton1Click:Connect(function()
+    Settings.Reach = not Settings.Reach
+    if Settings.Reach then
+        ReachBtn.Text = "Reach: ON"
+        ReachBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 50)
+    else
+        ReachBtn.Text = "Reach: OFF"
+        ReachBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    local nearestMonster = nil
+    local shortestDist = math.huge
+    
+    local enemies = workspace:FindFirstChild("Enemies")
+    if enemies then
+        for _, mob in pairs(enemies:GetChildren()) do
+            local hrp = mob:FindFirstChild("HumanoidRootPart")
+            local hum = mob:FindFirstChildOfClass("Humanoid")
+            local myHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            
+            if hrp and hum and hum.Health > 0 and myHrp then
+                local dist = (myHrp.Position - hrp.Position).Magnitude
+                if dist < shortestDist then
+                    shortestDist = dist
+                    nearestMonster = mob
+                end
+            end
+        end
+    end
+
+    if nearestMonster then
+        AttackTarget(nearestMonster)
+    end
+end)
